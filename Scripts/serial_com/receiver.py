@@ -116,10 +116,10 @@ def run_with_config(config, ser):
             pass
         return
 
-    cmd = ["python3", main_path] + args
+    cmd = ["python3", "-u", main_path] + args
     log(f"Starting process: {' '.join(cmd)}")
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, universal_newlines=True)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     except Exception as e:
         log(f"Failed to start process: {e}")
         try:
