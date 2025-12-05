@@ -1,0 +1,8 @@
+{
+  "directory": "/home/pi/app", 
+  "main": "app/main.py",
+  "args": [],
+
+  "include": ["**"],
+  "exclude": ["*.log", "__pycache__/**"]
+}
