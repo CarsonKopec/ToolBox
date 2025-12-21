@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Pi RGB565 Viewer</title>
+  <style>
+    body { background: #000; margin: 0; display:flex; align-items:center; justify-content:center; height:100vh; }
+    canvas { image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <canvas id="screen" width="320" height="240"></canvas>
+
+  <script>
+  // ====== CONFIG ======
+  const WS_URL = "ws://localpi:8765"; // <--- replace with your Pi IP/hostname
+  // ====================
+
+  const canvas = document.getElementById("screen");
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width, height = canvas.height;
+  const imageData = ctx.createImageData(width, height);
+
+  function rgb565ToRGBA(buffer) {
+    // buffer is an ArrayBuffer of uint16 pixels little-endian (RGB565)
+    const dv = new DataView(buffer);
+    const pxCount = width * height;
+    const out = imageData.data; // Uint8ClampedArray
+    let outIndex = 0;
+
+    for (let i = 0; i < pxCount; i++) {
+      const pix = dv.getUint16(i * 2, true); // little-endian
+      // RGB565 -> 8-bit channels
+      const r = ((pix >> 11) & 0x1F) << 3;
+      const g = ((pix >> 5) & 0x3F) << 2;
+      const b = (pix & 0x1F) << 3;
+      out[outIndex++] = r;
+      out[outIndex++] = g;
+      out[outIndex++] = b;
+      out[outIndex++] = 255; // alpha
+    }
+  }
+
+  function parseHeaderAndPayload(ab) {
+    // Expect header 14 bytes: 4s MAGIC, 2w,2h,1bpp,1reserved,4 payload_size
+    const dv = new DataView(ab);
+    // read magic
+    const magic = String.fromCharCode(dv.getUint8(0)) +
+                  String.fromCharCode(dv.getUint8(1)) +
+                  String.fromCharCode(dv.getUint8(2)) +
+                  String.fromCharCode(dv.getUint8(3));
+    if (magic !== "FRAM") {
+      console.warn("Bad magic:", magic);
+      return null;
+    }
+    const w = dv.getUint16(4);
+    const h = dv.getUint16(6);
+    const bpp = dv.getUint8(8);
+    const payload_size = dv.getUint32(10);
+
+    const payloadOffset = 14;
+    const payload = ab.slice(payloadOffset, payloadOffset + payload_size);
+    return { w, h, bpp, payload };
+  }
+
+  let ws;
+
+  function start() {
+    ws = new WebSocket(WS_URL);
+    ws.binaryType = "arraybuffer";
+
+    ws.onopen = () => {
+      console.log("Connected to", WS_URL);
+    };
+
+    ws.onmessage = (evt) => {
+      const ab = evt.data;
+      const parsed = parseHeaderAndPayload(ab);
+      if (!parsed) return;
+      // basic sanity checks:
+      if (parsed.w !== width || parsed.h !== height) {
+        console.warn("Frame size mismatch", parsed.w, parsed.h);
+        return;
+      }
+      if (parsed.bpp !== 16) {
+        console.warn("Unexpected bpp", parsed.bpp);
+        return;
+      }
+
+      rgb565ToRGBA(parsed.payload);
+      ctx.putImageData(imageData, 0, 0);
+    };
+
+    ws.onclose = () => {
+      console.log("Socket closed, reconnecting in 1s...");
+      setTimeout(start, 1000);
+    };
+
+    ws.onerror = (e) => {
+      console.error("WebSocket error", e);
+      ws.close();
+    };
+  }
+
+  start();
+  </script>
+</body>
+</html>

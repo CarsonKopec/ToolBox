@@ -104,6 +104,7 @@ def extract_archive_to(archive_path, target_dir):
 
 def run_with_config(config, ser):
     deploy_dir = config.get("directory", DEFAULT_APP_DIR)
+    venv_path = config.get("venv_path", deploy_dir)
     main_rel = config.get("main", "main.py")
     args = config.get("args", [])
     main_path = os.path.join(deploy_dir, main_rel)
@@ -116,7 +117,21 @@ def run_with_config(config, ser):
             pass
         return
 
-    cmd = ["python3", "-u", main_path] + args
+    venv_python = None
+    venv_candidates = [
+        os.path.join(venv_path, "bin", "python"),
+        os.path.join(venv_path, "Scripts", "python.exe")
+    ]
+    for vp in venv_candidates:
+        if os.path.exists(vp):
+            venv_python = vp
+            log(f"Detected virtualenv Python: {vp}")
+            break
+
+    # Use venv Python if found, otherwise system python3
+    python_cmd = venv_python if venv_python else "python3"
+
+    cmd = [python_cmd, "-u", main_path] + args
     log(f"Starting process: {' '.join(cmd)}")
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
